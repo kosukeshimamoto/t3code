@@ -325,6 +325,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["transparent transparency solid menus dialogs composer"],
   },
   {
+    id: "window-transparency",
+    title: "Window transparency",
+    to: "/settings/appearance",
+    searchTerms: ["wallpaper vibrancy glass opacity transparent"],
+    desktopOnly: true,
+    macOnly: true,
+  },
+  {
     id: "diff-color-scheme",
     title: "Diff colors",
     to: "/settings/diffs",

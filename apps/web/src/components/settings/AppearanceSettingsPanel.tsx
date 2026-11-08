@@ -1,3 +1,5 @@
+import { isElectron } from "../../env";
+import { isMacPlatform } from "../../lib/utils";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import {
@@ -256,6 +258,20 @@ export function AppearanceSettingsPanel() {
             </div>
           }
         />
+
+        {isElectron && isMacPlatform(navigator.platform) ? (
+          <SettingsRow
+            {...searchableSetting("window-transparency")}
+            description="Show the desktop behind the window. Uses Glass opacity."
+            control={
+              <Switch
+                aria-label="Window transparency"
+                checked={settings.windowTransparency}
+                onCheckedChange={(windowTransparency) => updateSettings({ windowTransparency })}
+              />
+            }
+          />
+        ) : null}
 
         <SettingsRow
           {...searchableSetting("chat-width")}

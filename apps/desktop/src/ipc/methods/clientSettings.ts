@@ -1,9 +1,10 @@
-import { ClientSettingsSchema } from "@t3tools/contracts";
+import { ClientSettingsSchema, DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
 import * as DesktopClientSettings from "../../settings/DesktopClientSettings.ts";
+import * as DesktopWindow from "../../window/DesktopWindow.ts";
 import * as DesktopSnapShot from "../../snapShot/DesktopSnapShot.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
@@ -25,7 +26,15 @@ export const setClientSettings = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.clientSettings.set")(function* (settings) {
     const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
     const snapShot = yield* DesktopSnapShot.DesktopSnapShot;
+    const previous = yield* clientSettings.get;
     yield* clientSettings.set(settings);
+    if (
+      Option.getOrElse(previous, () => DEFAULT_CLIENT_SETTINGS).windowTransparency !==
+      settings.windowTransparency
+    ) {
+      const windows = yield* DesktopWindow.DesktopWindow;
+      yield* windows.syncAppearance;
+    }
     yield* snapShot.configure(settings);
   }),
 });

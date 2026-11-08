@@ -617,6 +617,7 @@ export class GhosttyTerminalSurface {
     readonly ratio: number;
   } | null = null;
   private theme: GhosttyTheme;
+  private readonly transparentBackground: boolean;
   // App capture can hide keydowns, so only encoded presses qualify for Kitty releases.
   private readonly encodedKeyCodes = new Set<string>();
   private pasteShortcutToken = 0;
@@ -654,6 +655,7 @@ export class GhosttyTerminalSurface {
     metrics: GhosttyCellMetrics,
     fontFamily: string,
     options: GhosttyTerminalSurfaceOptions,
+    transparentBackground: boolean,
   ) {
     this.mount = mount;
     this.canvas = canvas;
@@ -661,6 +663,7 @@ export class GhosttyTerminalSurface {
     this.scrollbar = scrollbar;
     this.scrollbarThumb = scrollbarThumb;
     this.context = context;
+    this.transparentBackground = transparentBackground;
     this.core = core;
     this.mouseAnyEventTracking = core.isMouseAnyEventTracking();
     this.metrics = metrics;
@@ -709,10 +712,11 @@ export class GhosttyTerminalSurface {
     scrollbar.append(scrollbarThumb);
     mount.replaceChildren(canvas, input, scrollbar);
 
-    const context = canvas.getContext("2d", { alpha: false });
+    const transparent = document.documentElement.dataset.windowTransparency === "true";
+    const context = canvas.getContext("2d", { alpha: transparent });
     if (!context) throw new Error("Canvas 2D is unavailable");
     context.fillStyle = `rgb(${options.theme.background.r}, ${options.theme.background.g}, ${options.theme.background.b})`;
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    if (!transparent) context.fillRect(0, 0, canvas.width, canvas.height);
     const fontSize = terminalFontSize(options.font?.size);
     try {
       // Load bundled fonts before measuring; fallback metrics would size the wrong grid.
@@ -740,6 +744,7 @@ export class GhosttyTerminalSurface {
       metrics,
       fontFamily,
       options,
+      transparent,
     );
     surface.fit();
     return surface;
@@ -2071,6 +2076,9 @@ export class GhosttyTerminalSurface {
     this.refreshHoveredLink();
     renderGhosttySnapshot({
       context: this.context,
+      transparentBackground:
+        this.transparentBackground &&
+        document.documentElement.dataset.windowTransparency === "true",
       snapshot: this.snapshot,
       metrics: this.metrics,
       fontSize: this.fontSize,

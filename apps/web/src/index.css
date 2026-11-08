@@ -2573,3 +2573,40 @@ code {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
+
+html[data-window-transparency="true"]:root {
+  --app-chrome-background: color-mix(
+    in srgb,
+    var(--app-theme-chrome, var(--background)) var(--glass-opacity),
+    transparent
+  );
+  &,
+  [data-app-sidebar] {
+    --window-sidebar-base: var(--color-zinc-50);
+    @variant dark {
+      --window-sidebar-base: var(--card);
+    }
+    --sidebar: color-mix(
+      in srgb,
+      var(--app-theme-sidebar, var(--window-sidebar-base)) var(--glass-opacity),
+      transparent
+    );
+    --sidebar-stage-fade: var(--sidebar);
+  }
+  /* Boot and browser chrome synchronization also write inline backgrounds. */
+  background: transparent !important;
+
+  body {
+    background: transparent !important;
+  }
+
+  [data-slot="sidebar-inset"],
+  [data-thread-terminal-drawer] {
+    background: color-mix(in srgb, var(--background) var(--glass-opacity), transparent);
+  }
+
+  .window-canvas,
+  [data-slot="sidebar-inset"] [data-thread-terminal-drawer] {
+    background: transparent;
+  }
+}

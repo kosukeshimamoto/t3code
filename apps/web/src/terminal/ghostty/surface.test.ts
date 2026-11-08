@@ -70,10 +70,11 @@ describe("GhosttyTerminalSurface visibility", () => {
     return event;
   }
 
-  function createHarness() {
+  function createHarness(transparent = false) {
     vi.useFakeTimers();
     const frames = new Map<number, FrameRequestCallback>();
     const resizeTargets = new Map<(entries: { target: Element }[]) => void, Set<Element>>();
+    const contextRequests = vi.fn();
     const paint = vi.fn((_operation: string, _args: ReadonlyArray<unknown>) => {});
     let frameId = 0;
     const requestFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -101,7 +102,8 @@ describe("GhosttyTerminalSurface visibility", () => {
       remove() {
         this.parentElement = null;
       }
-      getContext() {
+      getContext(type: string, options?: CanvasRenderingContext2DSettings) {
+        contextRequests(type, options);
         return context;
       }
       focus() {
@@ -132,6 +134,7 @@ describe("GhosttyTerminalSurface visibility", () => {
       restore() {},
       save() {},
       setTransform() {},
+      clearRect: (...args: number[]) => paint("clearRect", args),
       fillRect: (...args: number[]) => paint("fillRect", args),
       strokeRect: (...args: number[]) => paint("strokeRect", args),
       fillText: (...args: [string, number, number, number?]) => paint("fillText", args),
@@ -142,6 +145,7 @@ describe("GhosttyTerminalSurface visibility", () => {
       }),
     };
     vi.stubGlobal("document", {
+      documentElement: { dataset: { windowTransparency: transparent ? "true" : undefined } },
       createElement: (tag: string) => (tag === "canvas" ? canvas : new TerminalTestElement()),
       fonts: Object.assign(new EventTarget(), { load: async () => [], add() {} }),
     });
@@ -181,6 +185,7 @@ describe("GhosttyTerminalSurface visibility", () => {
 
     return {
       canvas,
+      contextRequests,
       mount,
       frames,
       paint,
@@ -257,6 +262,24 @@ describe("GhosttyTerminalSurface visibility", () => {
       },
     };
   }
+
+  it.each([false, true])(
+    "clears default backgrounds only for transparent canvases (%s)",
+    async (transparent) => {
+      const harness = createHarness(transparent);
+      const surface = await harness.create();
+      expect(harness.contextRequests).toHaveBeenCalledWith("2d", { alpha: transparent });
+      harness.paint.mockClear();
+      surface.write("hello\r\n\x1b[41mred\x1b[0m");
+      harness.flushFrame();
+      const operations = harness.paint.mock.calls.map(([operation]) => operation);
+      expect(operations.includes("clearRect")).toBe(transparent);
+      expect(operations).toContain("fillRect");
+      expect(harness.renderedSnapshot.rowData[1]?.cells[0]?.background).not.toEqual(
+        harness.renderedSnapshot.background,
+      );
+    },
+  );
 
   afterEach(() => {
     for (const surface of surfaces) surface.dispose();

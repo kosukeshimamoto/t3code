@@ -270,13 +270,19 @@ function syncWindowAppearance(
   window: Electron.BrowserWindow,
   shouldUseDarkColors: boolean,
   platform: NodeJS.Platform,
+  transparency?: boolean,
 ): Effect.Effect<void> {
   return Effect.sync(() => {
     if (window.isDestroyed()) {
       return;
     }
 
-    window.setBackgroundColor(getInitialWindowBackgroundColor(shouldUseDarkColors));
+    if (platform === "darwin" && transparency !== undefined) {
+      window.setVibrancy(transparency ? "under-window" : null);
+    }
+    window.setBackgroundColor(
+      transparency ? "#00000000" : getInitialWindowBackgroundColor(shouldUseDarkColors),
+    );
     const { titleBarOverlay } = getWindowTitleBarOptions(shouldUseDarkColors, platform);
     if (typeof titleBarOverlay === "object") {
       window.setTitleBarOverlay(titleBarOverlay);
@@ -314,6 +320,20 @@ export const make = Effect.gen(function* () {
   const previewPasskeys = yield* PreviewPasskeys.PreviewPasskeys;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const clientSettings = yield* DesktopClientSettings.DesktopClientSettings;
+  const windowTransparency =
+    environment.platform === "darwin"
+      ? clientSettings.get.pipe(
+          Effect.map(
+            (settings) =>
+              Option.getOrElse(settings, () => DEFAULT_CLIENT_SETTINGS).windowTransparency,
+          ),
+          Effect.catch((error) =>
+            logWindowWarning("failed to read window transparency setting", {
+              message: error.message,
+            }).pipe(Effect.as(false)),
+          ),
+        )
+      : Effect.succeed(false);
   const electronApp = yield* ElectronApp.ElectronApp;
   const rendererHistory = yield* DesktopRendererHistory.DesktopRendererHistory;
   const backendReadyRef = yield* Ref.make(false);
@@ -373,6 +393,7 @@ export const make = Effect.gen(function* () {
     const iconPaths = yield* assets.iconPaths;
     const iconOption = getIconOption(iconPaths, environment.platform);
     const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+    const transparency = yield* windowTransparency;
     const persistedSettings = yield* desktopSettings.get;
     const persistedBounds = persistedSettings.mainWindowBounds;
     const displayBoundsResult = yield* Effect.sync(() => {
@@ -403,8 +424,13 @@ export const make = Effect.gen(function* () {
       minHeight: DesktopAppSettings.MIN_MAIN_WINDOW_SIZE.height,
       show: false,
       autoHideMenuBar: true,
-      ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
-      backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors),
+      ...(environment.platform === "darwin"
+        ? { disableAutoHideCursor: true, visualEffectState: "active" as const }
+        : {}),
+      backgroundColor: transparency
+        ? "#00000000"
+        : getInitialWindowBackgroundColor(shouldUseDarkColors),
+      ...(transparency ? { vibrancy: "under-window" as const } : {}),
       ...iconOption,
       title: environment.displayName,
       ...getWindowTitleBarOptions(shouldUseDarkColors, environment.platform),
@@ -1076,8 +1102,15 @@ export const make = Effect.gen(function* () {
     }),
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
+      const transparency = yield* windowTransparency;
+      const main = yield* electronWindow.main;
       yield* electronWindow.syncAllAppearance((window) =>
-        syncWindowAppearance(window, shouldUseDarkColors, environment.platform),
+        syncWindowAppearance(
+          window,
+          shouldUseDarkColors,
+          environment.platform,
+          Option.isSome(main) && main.value === window ? transparency : undefined,
+        ),
       );
     }).pipe(Effect.withSpan("desktop.window.syncAppearance")),
   });

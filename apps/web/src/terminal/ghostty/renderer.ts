@@ -122,6 +122,7 @@ export function renderGhosttySnapshot(options: {
   readonly fontSize: number;
   readonly fontFamily: string;
   readonly padding: number;
+  readonly transparentBackground?: boolean;
   readonly forceFull: boolean;
   readonly cursorOn: boolean;
   readonly previousCursorY?: number | null;
@@ -164,7 +165,11 @@ export function renderGhosttySnapshot(options: {
     context.save();
     context.resetTransform();
     context.fillStyle = cssColor(snapshot.background);
-    context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    if (options.transparentBackground) {
+      context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+    } else {
+      context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    }
     context.restore();
   }
 
@@ -175,7 +180,11 @@ export function renderGhosttySnapshot(options: {
     const top = originY + rowIndex * metrics.height;
 
     context.fillStyle = cssColor(snapshot.background);
-    context.fillRect(padding, top, snapshot.cols * metrics.width, metrics.height);
+    if (options.transparentBackground) {
+      context.clearRect(padding, top, snapshot.cols * metrics.width, metrics.height);
+    } else {
+      context.fillRect(padding, top, snapshot.cols * metrics.width, metrics.height);
+    }
 
     let backgroundStart = 0;
     while (backgroundStart < row.cells.length) {

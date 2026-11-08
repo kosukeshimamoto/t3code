@@ -1,7 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
-import { DesktopSnapShotId } from "@t3tools/contracts";
+import {
+  DEFAULT_CLIENT_SETTINGS,
+  type ClientSettings,
+  DesktopSnapShotId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
@@ -117,7 +121,8 @@ function makeFakeBrowserWindow() {
       windowListeners.set(eventName, listener);
     }),
     restore: vi.fn(),
-    setBackgroundColor: vi.fn(),
+    setBackgroundColor: vi.fn<(color: string) => void>(),
+    setVibrancy: vi.fn<(type: string | null) => void>(),
     setAutoHideCursor: vi.fn(),
     setFullScreen: vi.fn(),
     setOpacity: vi.fn(),
@@ -130,6 +135,8 @@ function makeFakeBrowserWindow() {
 
   return {
     window: window as unknown as Electron.BrowserWindow,
+    setBackgroundColor: window.setBackgroundColor,
+    setVibrancy: window.setVibrancy,
     getBounds: window.getBounds,
     getNormalBounds: window.getNormalBounds,
     isDestroyed: window.isDestroyed,
@@ -218,6 +225,9 @@ const desktopWindowBoundsEquivalence = Schema.toEquivalence(
 
 function layerTest(input: {
   readonly window: Electron.BrowserWindow;
+  readonly platform?: NodeJS.Platform;
+  readonly clientSettings?: () => ClientSettings;
+  readonly darkColors?: () => boolean;
   readonly createCount: Ref.Ref<number>;
   readonly mainWindow: Ref.Ref<Option.Option<Electron.BrowserWindow>>;
   readonly createdWindowOptions?: Electron.BrowserWindowConstructorOptions[];
@@ -305,9 +315,27 @@ function layerTest(input: {
           recordMetrics: () => Effect.void,
           shutdown: Effect.void,
         }),
-        layerDesktopEnvironment,
+        input.platform === undefined
+          ? layerDesktopEnvironment
+          : DesktopEnvironment.layer({ ...environmentInput, platform: input.platform }).pipe(
+              Layer.provide(
+                Layer.mergeAll(
+                  NodeServices.layer,
+                  DesktopConfig.layerTest({
+                    T3CODE_PORT: "3773",
+                    VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
+                  }),
+                ),
+              ),
+            ),
         layerDesktopAppSettings,
-        layerDesktopClientSettings,
+        input.clientSettings === undefined
+          ? layerDesktopClientSettings
+          : Layer.mock(DesktopClientSettings.DesktopClientSettings)({
+              get: Effect.sync(() =>
+                Option.some(input.clientSettings?.() ?? DEFAULT_CLIENT_SETTINGS),
+              ),
+            }),
         layerDesktopServerExposure,
         DesktopState.layer,
         layerElectronApp,
@@ -328,7 +356,13 @@ function layerTest(input: {
               input.copiedTexts?.push(text);
             }),
         } satisfies ElectronShell.ElectronShell["Service"]),
-        layerElectronTheme,
+        input.darkColors === undefined
+          ? layerElectronTheme
+          : Layer.succeed(ElectronTheme.ElectronTheme, {
+              shouldUseDarkColors: Effect.sync(input.darkColors),
+              setSource: () => Effect.void,
+              onUpdated: () => Effect.void,
+            }),
         layerElectronWindow,
         Layer.mock(PreviewPasskeys.PreviewPasskeys)({
           bridgeEnabled: false,
@@ -462,6 +496,61 @@ const captureOne = DesktopSnapShotId.make("11111111-1111-4111-8111-111111111111"
 const captureTwo = DesktopSnapShotId.make("22222222-2222-4222-8222-222222222222");
 
 describe("DesktopWindow", () => {
+  it.effect.each(["darwin", "win32", "linux"] as const)(
+    "applies persisted transparency only on macOS (%s)",
+    (platform) =>
+      Effect.gen(function* () {
+        const fake = makeFakeBrowserWindow();
+        const createCount = yield* Ref.make(0);
+        const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+        const options: Electron.BrowserWindowConstructorOptions[] = [];
+        let enabled = true;
+        let dark = false;
+        yield* Effect.gen(function* () {
+          const windows = yield* DesktopWindow.DesktopWindow;
+          yield* windows.createMain;
+          assert.equal(options[0]?.vibrancy, platform === "darwin" ? "under-window" : undefined);
+          assert.equal(
+            options[0]?.backgroundColor,
+            platform === "darwin" ? "#00000000" : "#ffffff",
+          );
+          if (platform === "darwin") assert.equal(options[0]?.visualEffectState, "active");
+          dark = true;
+          yield* windows.syncAppearance;
+          assert.equal(
+            fake.setBackgroundColor.mock.lastCall?.[0],
+            platform === "darwin" ? "#00000000" : "#000000",
+          );
+          enabled = false;
+          yield* windows.syncAppearance;
+          assert.equal(fake.setBackgroundColor.mock.lastCall?.[0], "#000000");
+          enabled = true;
+          yield* windows.syncAppearance;
+          if (platform === "darwin") {
+            assert.deepEqual(fake.setVibrancy.mock.calls, [
+              ["under-window"],
+              [null],
+              ["under-window"],
+            ]);
+          } else {
+            assert.equal(fake.setVibrancy.mock.calls.length, 0);
+          }
+        }).pipe(
+          Effect.provide(
+            layerTest({
+              window: fake.window,
+              createCount,
+              mainWindow,
+              createdWindowOptions: options,
+              platform,
+              clientSettings: () => ({ ...DEFAULT_CLIENT_SETTINGS, windowTransparency: enabled }),
+              darkColors: () => dark,
+            }),
+          ),
+        );
+      }),
+  );
+
   it("restores bounds only when the window fits within a connected display", () => {
     const persistedBounds = { x: 2040, y: 80, width: 1320, height: 880 };
     const displays = [

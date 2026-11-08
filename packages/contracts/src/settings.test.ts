@@ -538,3 +538,13 @@ describe("server model preferences", () => {
     expect(decodeServerSettingsPatch(input)).toEqual(input);
   });
 });
+
+describe("window transparency settings", () => {
+  it("keeps existing installations opaque and accepts opt-in patches", () => {
+    expect(decodeClientSettings({}).windowTransparency).toBe(false);
+    expect(decodeClientSettings({ windowTransparency: true }).windowTransparency).toBe(true);
+    expect(decodeClientSettingsPatch({ windowTransparency: true })).toEqual({
+      windowTransparency: true,
+    });
+  });
+});

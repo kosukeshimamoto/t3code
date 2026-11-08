@@ -1132,7 +1132,7 @@ function TerminalSessionViewport({
       });
       themeObserver.observe(document.documentElement, {
         attributes: true,
-        attributeFilter: ["class", "style"],
+        attributeFilter: ["class", "style", "data-window-transparency"],
       });
       setupCleanups.push(() => themeObserver.disconnect());
 
