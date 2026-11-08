@@ -531,6 +531,8 @@ export interface GhosttyTerminalSurfaceOptions {
   readonly onLinkHover?: (text: string | null) => void;
   /** The host must prevent the default menu; native Paste cannot reach a canvas terminal. */
   readonly onContextMenu?: (event: MouseEvent) => void;
+  /** Canvas alpha is fixed at creation; default-background cells clear while window transparency stays on. */
+  readonly transparentBackground?: boolean;
 }
 
 export class GhosttyTerminalSurface {
@@ -712,7 +714,7 @@ export class GhosttyTerminalSurface {
     scrollbar.append(scrollbarThumb);
     mount.replaceChildren(canvas, input, scrollbar);
 
-    const transparent = document.documentElement.dataset.windowTransparency === "true";
+    const transparent = options.transparentBackground === true;
     const context = canvas.getContext("2d", { alpha: transparent });
     if (!context) throw new Error("Canvas 2D is unavailable");
     context.fillStyle = `rgb(${options.theme.background.r}, ${options.theme.background.g}, ${options.theme.background.b})`;

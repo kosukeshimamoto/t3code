@@ -267,7 +267,7 @@ describe("GhosttyTerminalSurface visibility", () => {
     "clears default backgrounds only for transparent canvases (%s)",
     async (transparent) => {
       const harness = createHarness(transparent);
-      const surface = await harness.create();
+      const surface = await harness.create({ transparentBackground: transparent });
       expect(harness.contextRequests).toHaveBeenCalledWith("2d", { alpha: transparent });
       harness.paint.mockClear();
       surface.write("hello\r\n\x1b[41mred\x1b[0m");
@@ -280,6 +280,16 @@ describe("GhosttyTerminalSurface visibility", () => {
       );
     },
   );
+
+  it("keeps hosts that do not opt in opaque while the window is transparent", async () => {
+    const harness = createHarness(true);
+    const surface = await harness.create();
+    expect(harness.contextRequests).toHaveBeenCalledWith("2d", { alpha: false });
+    harness.paint.mockClear();
+    surface.write("hello");
+    harness.flushFrame();
+    expect(harness.paint.mock.calls.map(([operation]) => operation)).not.toContain("clearRect");
+  });
 
   afterEach(() => {
     for (const surface of surfaces) surface.dispose();

@@ -1,4 +1,4 @@
-import { isMacPlatform } from "@t3tools/shared/keybindingMatching";
+import { isMacPlatform } from "./lib/utils";
 
 export function applyWindowTransparency(
   root: Pick<HTMLElement, "dataset">,
