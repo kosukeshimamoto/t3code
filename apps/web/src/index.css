@@ -2605,7 +2605,12 @@ html[data-window-transparency="true"]:root {
     background: color-mix(in srgb, var(--background) var(--glass-opacity), transparent);
   }
 
+  [data-thread-terminal-drawer] {
+    --terminal-background: transparent;
+  }
+
   .window-canvas,
+  [data-timeline-loading],
   [data-slot="sidebar-inset"] [data-thread-terminal-drawer] {
     background: transparent;
   }
